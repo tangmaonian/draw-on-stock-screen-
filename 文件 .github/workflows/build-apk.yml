@@ -1,1 +1,45 @@
+name: Build APK
 
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # 兼容两种上传方式：1) 解压后的文件直接放仓库根目录  2) 只上传了 DrawStock.zip（自动解压）
+      - name: Locate project
+        run: |
+          if [ -f settings.gradle ]; then
+            echo "PROJ_DIR=." >> $GITHUB_ENV
+          else
+            ZIP=$(ls *.zip | head -n1)
+            mkdir -p _proj
+            unzip -o "$ZIP" -d _proj
+            S=$(find _proj -name settings.gradle | head -n1)
+            echo "PROJ_DIR=$(dirname "$S")" >> $GITHUB_ENV
+          fi
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.5'
+
+      - name: Build debug APK
+        working-directory: ${{ env.PROJ_DIR }}
+        run: gradle assembleDebug --no-daemon --stacktrace
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DrawStock-apk
+          path: ${{ env.PROJ_DIR }}/app/build/outputs/apk/debug/*.apk
